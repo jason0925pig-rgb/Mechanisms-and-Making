@@ -1,0 +1,1026 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mechanical Engineering Library v3.0 (Fixed Origins)</title>
+    <style>
+        :root {
+            --bg-dark: #1e1e1e;
+            --bg-panel: #252526;
+            --text-main: #d4d4d4;
+            --text-muted: #858585;
+            --accent: #007acc;
+            --accent-glow: rgba(0, 122, 204, 0.3);
+            --border: #333;
+            --font-stack: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            margin: 0;
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            font-family: var(--font-stack);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 260px;
+            background-color: var(--bg-panel);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+        }
+
+        .header {
+            padding: 20px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            color: var(--accent);
+            border-bottom: 1px solid var(--border);
+            letter-spacing: 1px;
+        }
+
+        .nav-scroll {
+            overflow-y: auto;
+            flex: 1;
+            padding: 10px;
+        }
+
+        .cat-label {
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            margin: 15px 10px 5px 10px;
+            font-weight: bold;
+        }
+
+        .nav-item {
+            padding: 10px 15px;
+            margin: 2px 0;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s;
+            font-size: 0.9rem;
+        }
+
+        .nav-item:hover { background-color: #2a2d2e; }
+        .nav-item.active { background-color: var(--accent); color: white; }
+
+        /* Main Content */
+        .main {
+            flex: 1;
+            padding: 40px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container { max-width: 900px; width: 100%; }
+
+        h1 { margin: 0 0 10px 0; font-weight: 300; font-size: 2.2rem; color: #fff; }
+        .badge { background: #333; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; color: var(--accent); margin-bottom: 20px; display: inline-block;}
+
+        /* Animation Stage */
+        .stage {
+            background: #111;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            height: 400px;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 30px;
+            position: relative;
+            overflow: hidden;
+            box-shadow: inset 0 0 50px rgba(0,0,0,0.5);
+        }
+
+        .stage svg {
+            width: 100%;
+            height: 100%;
+            /* Ensure physics look right */
+            shape-rendering: geometricPrecision; 
+        }
+
+        /* Description Grid */
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; }
+        .box h3 { border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-top: 0; color: var(--accent); }
+        .box p { line-height: 1.6; color: #ccc; }
+
+        /* --- KEYFRAMES & UTILS --- */
+        /* CRITICAL: transform-box: fill-box ensures rotation happens around the element's own center, not the SVG origin */
+        .spin { 
+            transform-box: fill-box; 
+            transform-origin: center; 
+            animation: rotate 4s linear infinite; 
+        }
+        .spin-rev { 
+            transform-box: fill-box; 
+            transform-origin: center; 
+            animation: rotate-rev 4s linear infinite; 
+        }
+
+        @keyframes rotate { 100% { transform: rotate(360deg); } }
+        @keyframes rotate-rev { 100% { transform: rotate(-360deg); } }
+
+        /* Mobile */
+        .toggle { display: none; position: absolute; top: 15px; left: 15px; z-index: 100; background: var(--accent); border: none; padding: 8px 12px; border-radius: 4px; color: white;}
+        @media(max-width: 768px) {
+            .sidebar { position: absolute; height: 100%; transform: translateX(-100%); transition: 0.3s; z-index: 99; }
+            .sidebar.open { transform: translateX(0); }
+            .toggle { display: block; }
+            .grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+<button class="toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')">☰</button>
+
+<nav class="sidebar">
+    <div class="header">ENG_LIBRARY_V3</div>
+    <div class="nav-scroll" id="menu"></div>
+</nav>
+
+<main class="main">
+    <div class="container" id="content">
+        <div style="text-align:center; margin-top:100px; color: #666;">
+            <h2>Select a Mechanism</h2>
+            <p>Precise vector animations initialized.</p>
+        </div>
+    </div>
+</main>
+
+<script>
+    // --- GEOMETRY HELPERS ---
+    const createGear = (teeth, r, hole) => {
+        let d = "";
+        const step = (Math.PI * 2) / teeth;
+        const add = step * 0.25; 
+        for(let i=0; i<teeth; i++) {
+            const a = i * step;
+            const rBase = r - 5;
+            const rTip = r + 5;
+            d += (i===0 ? `M${rBase * Math.cos(a - add)} ${rBase * Math.sin(a - add)}` : `L${rBase * Math.cos(a - add)} ${rBase * Math.sin(a - add)}`) + 
+                 `C${rTip * Math.cos(a - add/2)} ${rTip * Math.sin(a - add/2)} ${rTip * Math.cos(a + add/2)} ${rTip * Math.sin(a + add/2)} ${rBase * Math.cos(a + add)} ${rBase * Math.sin(a + add)} `;
+        }
+        d += "Z";
+        if(hole) d += ` M0 -${hole} A${hole} ${hole} 0 1 0 0 ${hole} A${hole} ${hole} 0 1 0 0 -${hole} Z`;
+        return d;
+    };
+
+    const DATA = {
+        // === 1. TRANSMISSIONS ===
+        'planetary': {
+            cat: 'Transmissions',
+            title: 'Planetary Gear Set',
+            desc: 'Sun (Center) drives Planets (Orbiting), inside a Fixed Ring. Note: Carrier rotates slower than Sun.',
+            svg: `
+                <circle r="100" fill="none" stroke="#444" stroke-width="12"/>
+                <circle r="100" fill="none" stroke="#555" stroke-width="2" stroke-dasharray="3 3"/>
+                <path d="${createGear(30, 100, 0)}" fill="none" stroke="#333" opacity="0.5"/>
+
+                <g id="planet-carrier">
+                    <g transform="translate(0, -70)">
+                         <g class="planet-gear"><path d="${createGear(12, 30, 8)}" fill="#222" stroke="#00bfff" stroke-width="2"/></g>
+                    </g>
+                    <g transform="translate(60.6, 35)">
+                         <g class="planet-gear"><path d="${createGear(12, 30, 8)}" fill="#222" stroke="#00bfff" stroke-width="2"/></g>
+                    </g>
+                    <g transform="translate(-60.6, 35)">
+                         <g class="planet-gear"><path d="${createGear(12, 30, 8)}" fill="#222" stroke="#00bfff" stroke-width="2"/></g>
+                    </g>
+                    <path d="M0 -70 L0 0 M60.6 35 L0 0 M-60.6 35 L0 0" stroke="#00bfff" stroke-width="4" opacity="0.5"/>
+                </g>
+                <g id="sun-gear"><path d="${createGear(15, 40, 10)}" fill="#222" stroke="#007acc" stroke-width="2"/></g>
+            `,
+            update: (t) => {
+                const sun = document.getElementById('sun-gear');
+                const carrier = document.getElementById('planet-carrier');
+                const planets = document.querySelectorAll('.planet-gear');
+                const sunRot = t * 0.1;
+                const carrierRot = sunRot * (40 / (40 + 100)); 
+                const planetRot = -sunRot * 2; 
+
+                if(sun) sun.setAttribute('transform', `rotate(${sunRot})`);
+                if(carrier) carrier.setAttribute('transform', `rotate(${carrierRot})`);
+                planets.forEach(p => p.setAttribute('transform', `rotate(${planetRot})`));
+            }
+        },
+        'spur-gears': {
+            cat: 'Transmissions',
+            title: 'Spur Gears',
+            desc: 'Simple meshing. Note how teeth push each other, reversing direction.',
+            svg: `
+                <g transform="translate(-52, 0)">
+                    <g id="spur-left">
+                        <path d="${createGear(12, 50, 10)}" fill="#222" stroke="#007acc" stroke-width="2"/>
+                        <circle r="5" fill="#007acc"/>
+                    </g>
+                </g>
+                <g transform="translate(52, 0)">
+                    <g id="spur-right">
+                         <path d="${createGear(12, 50, 10)}" fill="#222" stroke="#00bfff" stroke-width="2"/>
+                         <circle r="5" fill="#00bfff"/>
+                    </g>
+                </g>
+            `,
+            update: (t) => {
+                const l = document.getElementById('spur-left');
+                const r = document.getElementById('spur-right');
+                const ang = t * 0.1;
+                if(l) l.setAttribute('transform', `rotate(${ang})`);
+                if(r) r.setAttribute('transform', `rotate(${-ang + 15})`);
+            }
+        },
+        'worm-gear': {
+            cat: 'Transmissions',
+            title: 'Worm Gear',
+            desc: 'Worm (top) drives the Gear (bottom). Note the screw threads visibly pushing the gear teeth.',
+            svg: `
+                <!-- Gear (Wheel) -->
+                <g transform="translate(0, 42)">
+                     <g id="worm-wheel">
+                        <path d="${createGear(24, 60, 15)}" fill="#222" stroke="#007acc" stroke-width="2"/>
+                        <circle r="10" fill="#333" stroke="#007acc"/>
+                     </g>
+                </g>
+                
+                <!-- Worm (Screw) -->
+                <g transform="translate(0, -50)">
+                    <defs>
+                        <clipPath id="worm-clip"><rect x="-80" y="-20" width="160" height="50"/></clipPath>
+                    </defs>
+                    <g clip-path="url(#worm-clip)">
+                        <!-- Shaft body -->
+                        <rect x="-90" y="-15" width="180" height="30" fill="#333" stroke="#aaa" stroke-width="2"/>
+                        
+                        <!-- Moving Threads (Simulating the screw turning) -->
+                        <g id="worm-screw-group">
+                            <!-- We draw "teeth" that look like the profile of a screw -->
+                            <!-- Pitch approx 15.7px to match gear -->
+                            <path id="worm-thread-path" d="" fill="#444" stroke="#fff" stroke-width="2"/>
+                        </g>
+                    </g>
+                </g>
+            `,
+            update: (t) => {
+                // Pitch of gear (radius 60, 24 teeth)
+                // P = 2*PI*60 / 24 = 5*PI = 15.708 px
+                const pitch = 15.708;
+                
+                // Slow rotation
+                const speed = 0.02; 
+                const phase = t * speed; 
+                
+                // Animate threads moving linearly
+                // We create a path of repeating trapezoids
+                const offset = -(phase * 10) % pitch;
+                
+                const screw = document.getElementById('worm-thread-path');
+                if(screw) {
+                    let d = "";
+                    // Draw enough threads to cover the width
+                    for(let x = -100; x < 100; x += pitch) {
+                        // Trapezoidal thread profile
+                        d += `M${x} 15 L${x+3} 25 L${x+pitch-3} 25 L${x+pitch} 15 `;
+                    }
+                    screw.setAttribute('d', d);
+                    screw.setAttribute('transform', `translate(${offset}, 0)`);
+                }
+
+                // Wheel Rotation
+                // Linear motion of pitch 15.7 corresponds to 1 tooth (360/24 = 15 deg)
+                // ratio = 15 deg / 15.708 px = 0.9549 deg/px
+                const wheelAng = (phase * 10) * (360/24 / pitch);
+                const wheel = document.getElementById('worm-wheel');
+                if(wheel) wheel.setAttribute('transform', `rotate(${wheelAng})`);
+            }
+        },
+        'rack-pinion': {
+            cat: 'Transmissions',
+            title: 'Rack and Pinion',
+            desc: 'Precise mesh. Radius 30, 12 Teeth. Pitch matches exactly.',
+            svg: `
+                <g transform="translate(0, -35)">
+                    <g id="rp-pinion">
+                        <path d="${createGear(12, 30, 8)}" fill="#222" stroke="#007acc" stroke-width="2"/>
+                        <circle r="5" fill="#fff"/>
+                        <line x1="0" y1="0" x2="30" y2="0" stroke="#fff"/>
+                    </g>
+                </g>
+                <g transform="translate(0, 5)">
+                    <g id="rp-rack">
+                        <rect x="-250" y="0" width="500" height="20" fill="#222" stroke="#666"/>
+                        <path id="rack-teeth-path" d="" fill="#444" stroke="#fff" stroke-width="2"/>
+                    </g>
+                </g>
+            `,
+            update: (t) => {
+                const r = 30; 
+                const teeth = 12;
+                const pitch = (2 * Math.PI * r) / teeth; // ~15.708
+                
+                // Generate rack teeth if not done
+                const rackPath = document.getElementById('rack-teeth-path');
+                if(rackPath && !rackPath.getAttribute('d')) {
+                    let d = "";
+                    const toothW = pitch / 2;
+                    // Draw teeth from -200 to 200
+                    for(let x=-250; x<250; x+=pitch) {
+                        // Inverted trapezoid for rack tooth
+                        d += `M${x + toothW*0.2} 0 L${x + toothW*0.4} -8 L${x + toothW*0.6} -8 L${x + toothW*0.8} 0 `; 
+                    }
+                    rackPath.setAttribute('d', d);
+                }
+
+                const x = Math.sin(t * 0.001) * 100;
+                const ang = (x / r) * (180 / Math.PI); // degrees
+                
+                const pin = document.getElementById('rp-pinion');
+                const rack = document.getElementById('rp-rack');
+                
+                if(rack) rack.setAttribute('transform', `translate(${x}, 0)`);
+                // Note: rack moves Right (+x), Pinion must roll on it.
+                // If rack moves Right relative to ground, and pinion is fixed ground...
+                // Wait, usually Pinion rotates and moves rack, OR Pinion moves along rack.
+                // Here Pinion is visually fixed in center. Rack moves.
+                // If Rack moves Right (+), Pinion interface moves Right. 
+                // For Pinion to not slip, it must rotate Counter-Clockwise (top moves left, bottom moves right).
+                // Velocity at bottom of pinion = Velocity of Rack.
+                // omega * r = v_rack
+                // if v_rack is +, bottom of pinion moves +. Bottom is +y relative to center? No, bottom is +y in screen, but tangent is +x.
+                // Tangent velocity at bottom (angle 90 or 270?)
+                // Let's just visually sync:
+                // If rack moves LEFT (-x), Pinion turns CCW? No.
+                // Imagine a car tire (Pinion) on a road (Rack). 
+                // If Car is stationary and Road moves backwards (Left), Tire spins Forward (CW).
+                // So if Rack moves Left (-), Pinion spins CW (+).
+                // ang = -x ...
+                if(pin) pin.setAttribute('transform', `rotate(${-ang})`);
+            }
+        },
+        'belt-drive': {
+            cat: 'Transmissions',
+            title: 'Belt Drive',
+            desc: 'Open (top) and Crossed (bottom).',
+            svg: `
+                <g transform="translate(0, -40)">
+                    <text x="0" y="-35" fill="#666" font-size="12" text-anchor="middle">OPEN</text>
+                    <path d="M-60 -20 L60 -15 M-60 20 L60 15" stroke="#333" stroke-width="4"/>
+                    <path id="belt-open-anim" d="M-60 -20 L60 -15 M60 15 L-60 20" stroke="#007acc" stroke-width="2" stroke-dasharray="10 10"/>
+                    <g id="p1-open" transform="translate(-60, 0)"><circle r="20" fill="#222" stroke="#ccc" stroke-width="2"/><line x1="-20" y1="0" x2="20" y2="0" stroke="#666"/><line x1="0" y1="-20" x2="0" y2="20" stroke="#666"/></g>
+                    <g id="p2-open" transform="translate(60, 0)"><circle r="15" fill="#222" stroke="#ccc" stroke-width="2"/><line x1="-15" y1="0" x2="15" y2="0" stroke="#666"/><line x1="0" y1="-15" x2="0" y2="15" stroke="#666"/></g>
+                </g>
+                <g transform="translate(0, 50)">
+                    <text x="0" y="-35" fill="#666" font-size="12" text-anchor="middle">CROSSED</text>
+                    <path d="M-60 -20 L60 15 M-60 20 L60 -15" stroke="#333" stroke-width="4"/>
+                    <path id="belt-cross-anim-1" d="M-60 -20 L60 15" stroke="#00bfff" stroke-width="2" stroke-dasharray="10 10"/>
+                    <path id="belt-cross-anim-2" d="M-60 20 L60 -15" stroke="#00bfff" stroke-width="2" stroke-dasharray="10 10"/>
+                    <g id="p1-cross" transform="translate(-60, 0)"><circle r="20" fill="#222" stroke="#ccc" stroke-width="2"/><line x1="-20" y1="0" x2="20" y2="0" stroke="#666"/></g>
+                    <g id="p2-cross" transform="translate(60, 0)"><circle r="15" fill="#222" stroke="#ccc" stroke-width="2"/><line x1="-15" y1="0" x2="15" y2="0" stroke="#666"/></g>
+                </g>
+            `,
+            update: (t) => {
+                const v = t * 0.15;
+                const ang1 = v / 20 * (180/Math.PI); 
+                const ang2 = v / 15 * (180/Math.PI);
+                
+                document.getElementById('p1-open').setAttribute('transform', `translate(-60,0) rotate(${ang1})`);
+                document.getElementById('p2-open').setAttribute('transform', `translate(60,0) rotate(${ang2})`);
+                const bOpen = document.getElementById('belt-open-anim');
+                if(bOpen) bOpen.setAttribute('stroke-dashoffset', -v % 20);
+
+                document.getElementById('p1-cross').setAttribute('transform', `translate(-60,0) rotate(${ang1})`);
+                document.getElementById('p2-cross').setAttribute('transform', `translate(60,0) rotate(${-ang2})`);
+                const bCross1 = document.getElementById('belt-cross-anim-1');
+                const bCross2 = document.getElementById('belt-cross-anim-2');
+                if(bCross1) bCross1.setAttribute('stroke-dashoffset', -v % 20);
+                if(bCross2) bCross2.setAttribute('stroke-dashoffset', v % 20);
+            }
+        },
+
+        // === 2. LINKAGES & MECHANISMS ===
+        'four-bar': {
+            cat: 'Linkages',
+            title: 'Four-Bar Linkage',
+            desc: 'Crank (Green) drives Rocker (Blue) via Coupler (White). View adjusted.',
+            svg: `
+                <!-- Shifted Ground down to -20 to fit in 200px height -->
+                <g transform="translate(0, -30)">
+                    <circle cx="-50" cy="50" r="5" fill="#fff"/>
+                    <circle cx="100" cy="50" r="5" fill="#fff"/>
+                    
+                    <line id="link1" stroke="#00ff00" stroke-width="6" stroke-linecap="round"/>
+                    <line id="link3" stroke="#00bfff" stroke-width="6" stroke-linecap="round"/>
+                    <line id="link2" stroke="#fff" stroke-width="4" stroke-linecap="round"/>
+                    
+                    <circle id="j1" r="4" fill="#000" stroke="#00ff00"/>
+                    <circle id="j2" r="4" fill="#000" stroke="#00bfff"/>
+                </g>
+            `,
+            update: (t) => {
+                const Ax = -50, Ay = 50;   
+                const Dx = 100, Dy = 50;   
+                const a = 40;  
+                const b = 160; 
+                const c = 80;  
+                const angle = t * 0.003;
+                const Bx = Ax + a * Math.cos(angle);
+                const By = Ay + a * Math.sin(angle);
+                const distBD = Math.sqrt( (Dx-Bx)**2 + (Dy-By)**2 );
+                const alpha = Math.acos( (c**2 + distBD**2 - b**2) / (2 * c * distBD) );
+                const baseAngle = Math.atan2(By - Dy, Bx - Dx);
+                const Cx = Dx + c * Math.cos(baseAngle - alpha);
+                const Cy = Dy + c * Math.sin(baseAngle - alpha);
+                
+                const l1 = document.getElementById('link1');
+                const l2 = document.getElementById('link2');
+                const l3 = document.getElementById('link3');
+                const j1 = document.getElementById('j1');
+                const j2 = document.getElementById('j2');
+                
+                if(l1 && !isNaN(Cx)) {
+                    l1.setAttribute('x1', Ax); l1.setAttribute('y1', Ay);
+                    l1.setAttribute('x2', Bx); l1.setAttribute('y2', By);
+                    l3.setAttribute('x1', Dx); l3.setAttribute('y1', Dy);
+                    l3.setAttribute('x2', Cx); l3.setAttribute('y2', Cy);
+                    l2.setAttribute('x1', Bx); l2.setAttribute('y1', By);
+                    l2.setAttribute('x2', Cx); l2.setAttribute('y2', Cy);
+                    j1.setAttribute('cx', Bx); j1.setAttribute('cy', By);
+                    j2.setAttribute('cx', Cx); j2.setAttribute('cy', Cy);
+                }
+            }
+        },
+        'slider-crank': {
+            cat: 'Linkages',
+            title: 'Slider-Crank',
+            desc: 'Simulates internal combustion engine piston motion.',
+            svg: `
+                <rect x="-20" y="-30" width="180" height="60" fill="none" stroke="#444" stroke-width="4"/>
+                <line id="sc-crank" stroke="#007acc" stroke-width="6"/>
+                <line id="sc-rod" stroke="#eee" stroke-width="4"/>
+                <rect id="sc-piston" width="50" height="40" fill="#00bfff" rx="4"/>
+                <circle cx="-60" cy="0" r="5" fill="#fff"/>
+            `,
+            update: (t) => {
+                const cx = -60, cy = 0;
+                const r = 40;
+                const rod = 120;
+                const angle = t * 0.003;
+                const px = cx + r * Math.cos(angle);
+                const py = cy + r * Math.sin(angle);
+                const pistonX = px + Math.sqrt(rod**2 - py**2);
+                document.getElementById('sc-crank').setAttribute('x1', cx);
+                document.getElementById('sc-crank').setAttribute('y1', cy);
+                document.getElementById('sc-crank').setAttribute('x2', px);
+                document.getElementById('sc-crank').setAttribute('y2', py);
+                document.getElementById('sc-rod').setAttribute('x1', px);
+                document.getElementById('sc-rod').setAttribute('y1', py);
+                document.getElementById('sc-rod').setAttribute('x2', pistonX);
+                document.getElementById('sc-rod').setAttribute('y2', 0);
+                const p = document.getElementById('sc-piston');
+                p.setAttribute('x', pistonX - 25);
+                p.setAttribute('y', -20);
+            }
+        },
+        'cam-follower': {
+            cat: 'Linkages',
+            title: 'Cam and Follower',
+            desc: 'Cam profile controls the rise and fall of the follower.',
+            svg: `
+                <g transform="translate(0, 30)">
+                    <path id="cam-shape" d="" fill="#333" stroke="#007acc" stroke-width="3"/>
+                    <circle cx="0" cy="0" r="4" fill="#666"/>
+                </g>
+                <g id="follower-group">
+                    <rect x="-6" y="-120" width="12" height="120" fill="#ddd"/>
+                    <circle cx="0" cy="0" r="6" fill="#00bfff"/>
+                </g>
+            `,
+            update: (t) => {
+                const angle = t * 0.003;
+                const cam = document.getElementById('cam-shape');
+                const follower = document.getElementById('follower-group');
+                let d = "";
+                const res = 60;
+                for(let i=0; i<=res; i++) {
+                    const theta = (i/res) * Math.PI * 2;
+                    const r = 40 + 20 * Math.cos(theta); 
+                    const x = r * Math.cos(theta + angle);
+                    const y = r * Math.sin(theta + angle);
+                    d += (i===0 ? "M" : "L") + `${x} ${y} `;
+                }
+                d += "Z";
+                if(cam) cam.setAttribute('d', d);
+                const evalAngle = -Math.PI/2 - angle;
+                const r_top = 40 + 20 * Math.cos(evalAngle);
+                if(follower) follower.setAttribute('transform', `translate(0, ${30 - r_top - 6})`);
+            }
+        },
+        'geneva-drive': {
+            cat: 'Linkages',
+            title: 'Geneva Drive',
+            desc: 'Converts continuous rotation (Driver) into intermittent rotary motion (Wheel).',
+            svg: `
+                <!-- Driver (Green) -->
+                <g id="g-driver" transform="translate(-50, 0)">
+                    <circle r="30" fill="none" stroke="#007acc" stroke-width="2"/>
+                    <!-- Locking cam area -->
+                    <path d="M0 0 L30 0 A30 30 0 1 1 21.2 -21.2 Z" fill="#222" opacity="0.5"/>
+                    <!-- Drive Pin -->
+                    <circle cx="30" cy="0" r="4" fill="#00ff00"/>
+                </g>
+
+                <!-- Geneva Wheel (Blue) -->
+                <g id="g-wheel" transform="translate(42.4, 0)">
+                     <path id="g-wheel-path" d="" fill="#222" stroke="#00bfff" stroke-width="3"/>
+                     <circle r="5" fill="#00bfff"/>
+                </g>
+            `,
+            update: (t) => {
+                const driver = document.getElementById('g-driver');
+                const wheel = document.getElementById('g-wheel');
+                const wheelPath = document.getElementById('g-wheel-path');
+                
+                // Draw Wheel (4 slots)
+                // Center distance = sqrt(2) * r_pin = 1.414 * 30 = 42.4
+                // We placed wheel at 42.4.
+                if(wheelPath && !wheelPath.getAttribute('d')) {
+                     // 4 slots
+                     let d = "";
+                     for(let i=0; i<4; i++) {
+                         d += `M0 0 L0 -35 M0 0 `; // simplified slots
+                         // Real shape is complex, using cross for prototype
+                     }
+                     // Actually let's draw a nice cross shape
+                     d = "M-10 -35 L10 -35 L10 -10 L35 -10 L35 10 L10 10 L10 35 L-10 35 L-10 10 L-35 10 L-35 -10 L-10 -10 Z";
+                     // Add slots
+                     d += " M-4 -40 L4 -40 L4 -10 L-4 -10 Z"; // Top
+                     d += " M-4 10 L4 10 L4 40 L-4 40 Z"; // Bottom
+                     d += " M10 -4 L40 -4 L40 4 L10 4 Z"; // Right
+                     d += " M-40 -4 L-10 -4 L-10 4 L-40 4 Z"; // Left
+                     wheelPath.setAttribute('d', d);
+                }
+                
+                // Kinematics
+                // Driver rotates continuously
+                const rotSpeed = 0.0015;
+                const drAngleRaw = t * rotSpeed;
+                // Normalize to 0-2PI
+                const drAngle = drAngleRaw % (2 * Math.PI);
+                const drDeg = drAngle * 180 / Math.PI;
+                
+                if(driver) driver.setAttribute('transform', `translate(-42.4, 0) rotate(${drDeg})`);
+                
+                // Wheel Angle Calculation
+                // 4 slots: Engagement happens when pin is within +/- 45 deg of the line of centers?
+                // Actually for 4 slots, engagement is 90 deg of driver rotation.
+                // Center line is at 0 deg (points to right for driver).
+                // Let's assume pin is at 0 deg when t=0.
+                
+                // Geneva logic: 
+                // Pin enters at -45 deg, leaves at +45 deg.
+                // During [-45, 45] (90 deg window), wheel rotates 90 deg.
+                // Outside this, wheel is stationary.
+                
+                // We need a monotonic total angle for the wheel to handle multiple turns.
+                const turnCount = Math.floor((drAngleRaw + Math.PI/4) / (2*Math.PI));
+                const localPhase = (drAngleRaw + Math.PI/4) % (2*Math.PI); // Shifted so 0 is start of engagement?
+                // Let's stick to simple wrapping for visual
+                
+                // Simpler: Map driver angle (0-360)
+                // Pin is at angle A. 
+                // If A is in [-45, 45], Wheel A_w = func(A).
+                // Else A_w = constant.
+                
+                // Using geometric relationship for 4-slot:
+                // tan(A_w) = (r_d * sin(A_d)) / (dist - r_d * cos(A_d))
+                // r_d = 30, dist = 42.42 (30 * sqrt(2))
+                
+                // Let's just normalize angle to [-180, 180] relative to engagement center
+                let angleInLoop = drDeg % 360;
+                if(angleInLoop > 180) angleInLoop -= 360;
+                
+                let wheelAng = 0;
+                const turn = Math.floor((t * rotSpeed * 180/Math.PI + 45) / 360); // Count full cycles
+                
+                // If angle is between -45 and 45, we are driving
+                if(angleInLoop >= -45 && angleInLoop <= 45) {
+                    // Drive phase
+                    // Exact relation for Geneva:
+                    // Beta = atan( sin(alpha) / (sqrt(2) - cos(alpha)) )
+                    const rad = angleInLoop * Math.PI / 180;
+                    const beta = Math.atan( Math.sin(rad) / (Math.SQRT2 - Math.cos(rad)) );
+                    wheelAng = -beta * 180 / Math.PI; // Negative because gears mesh opposite?
+                    // Actually pin pushes wheel away. If pin moves UP (positive angle), wheel moves DOWN (neg).
+                } else {
+                    // Dwell phase
+                    // Wheel stays at +/- 45 (or 0 relative to slot center)
+                    // It should be integer * 90
+                    wheelAng = -45; // End of previous stroke
+                    // This discontinuous logic is hard to smooth without state.
+                }
+                
+                // visual hack for smooth cyclic animation without state vars:
+                // We know wheel turns 90 deg for every 360 deg of driver.
+                // But only during 1/4 of the time.
+                // Total Wheel Angle = (Turns * 90) + Partial
+                
+                const cycle = (t * rotSpeed) / (2 * Math.PI); // 0.5 = half rotation
+                const whole = Math.floor(cycle);
+                const frac = cycle - whole; // 0 to 1
+                
+                // Active part is e.g. 0.875 to 0.125 (wrapping) or 0.0 to 0.25.
+                // Let's align pin at 0 deg = engagement center.
+                // Engagement is from -0.125 to +0.125 (Total 0.25 = 90deg).
+                
+                let partial = 0;
+                // Shift frac so engagement is 0..0.25
+                let adjFrac = frac + 0.125; 
+                if(adjFrac > 1) adjFrac -= 1;
+                
+                if(adjFrac < 0.25) {
+                     // Active 90 deg of driver rotation
+                     // Map 0..0.25 -> 0..90 deg wheel rotation
+                     // Use simple linear interpolation for robustness, or cosine for ease
+                     // Real geneva is close to linear in the middle but slow at ends
+                     const p = adjFrac / 0.25; // 0 to 1
+                     // Smooth step
+                     const smooth = p * p * (3 - 2 * p);
+                     partial = smooth * 90;
+                } else {
+                     partial = 90; // Dwell
+                }
+                
+                const totalWheelDeg = -(whole * 90 + partial) + 45; // +45 to center slot
+                
+                if(wheel) wheel.setAttribute('transform', `translate(42.4, 0) rotate(${totalWheelDeg})`);
+            }
+        },
+        'four-bar': {
+            cat: 'Linkages',
+            title: 'Four-Bar Linkage',
+            desc: 'Classic Crank-Rocker mechanism. Crank (Green) drives Rocker (Blue).',
+            svg: `
+                <circle cx="-50" cy="50" r="5" fill="#fff"/>
+                <circle cx="100" cy="50" r="5" fill="#fff"/>
+                
+                <line id="link1" stroke="#00ff00" stroke-width="6" stroke-linecap="round"/>
+                <line id="link3" stroke="#00bfff" stroke-width="6" stroke-linecap="round"/>
+                <line id="link2" stroke="#fff" stroke-width="4" stroke-linecap="round"/>
+                
+                <circle id="j1" r="4" fill="#000" stroke="#00ff00"/>
+                <circle id="j2" r="4" fill="#000" stroke="#00bfff"/>
+            `,
+            update: (t) => {
+                const Ax = -50, Ay = 50;   
+                const Dx = 100, Dy = 50;   
+                const a = 40;  
+                const b = 160; 
+                const c = 80;  
+                
+                const angle = t * 0.003;
+                const Bx = Ax + a * Math.cos(angle);
+                const By = Ay + a * Math.sin(angle);
+                
+                const distBD = Math.sqrt( (Dx-Bx)**2 + (Dy-By)**2 );
+                const alpha = Math.acos( (c**2 + distBD**2 - b**2) / (2 * c * distBD) );
+                const baseAngle = Math.atan2(By - Dy, Bx - Dx);
+                
+                const Cx = Dx + c * Math.cos(baseAngle - alpha);
+                const Cy = Dy + c * Math.sin(baseAngle - alpha);
+                
+                const l1 = document.getElementById('link1');
+                const l2 = document.getElementById('link2');
+                const l3 = document.getElementById('link3');
+                const j1 = document.getElementById('j1');
+                const j2 = document.getElementById('j2');
+                
+                if(l1 && !isNaN(Cx)) {
+                    l1.setAttribute('x1', Ax); l1.setAttribute('y1', Ay);
+                    l1.setAttribute('x2', Bx); l1.setAttribute('y2', By);
+                    l3.setAttribute('x1', Dx); l3.setAttribute('y1', Dy);
+                    l3.setAttribute('x2', Cx); l3.setAttribute('y2', Cy);
+                    l2.setAttribute('x1', Bx); l2.setAttribute('y1', By);
+                    l2.setAttribute('x2', Cx); l2.setAttribute('y2', Cy);
+                    j1.setAttribute('cx', Bx); j1.setAttribute('cy', By);
+                    j2.setAttribute('cx', Cx); j2.setAttribute('cy', Cy);
+                }
+            }
+        },
+        'slider-crank': {
+            cat: 'Linkages',
+            title: 'Slider-Crank',
+            desc: 'Simulates internal combustion engine piston motion.',
+            svg: `
+                <rect x="-20" y="-30" width="180" height="60" fill="none" stroke="#444" stroke-width="4"/>
+                <line id="sc-crank" stroke="#007acc" stroke-width="6"/>
+                <line id="sc-rod" stroke="#eee" stroke-width="4"/>
+                <rect id="sc-piston" width="50" height="40" fill="#00bfff" rx="4"/>
+                <circle cx="-60" cy="0" r="5" fill="#fff"/>
+            `,
+            update: (t) => {
+                const cx = -60, cy = 0;
+                const r = 40;
+                const rod = 120;
+                const angle = t * 0.003;
+                
+                const px = cx + r * Math.cos(angle);
+                const py = cy + r * Math.sin(angle);
+                const pistonX = px + Math.sqrt(rod**2 - py**2);
+                
+                document.getElementById('sc-crank').setAttribute('x1', cx);
+                document.getElementById('sc-crank').setAttribute('y1', cy);
+                document.getElementById('sc-crank').setAttribute('x2', px);
+                document.getElementById('sc-crank').setAttribute('y2', py);
+                document.getElementById('sc-rod').setAttribute('x1', px);
+                document.getElementById('sc-rod').setAttribute('y1', py);
+                document.getElementById('sc-rod').setAttribute('x2', pistonX);
+                document.getElementById('sc-rod').setAttribute('y2', 0);
+                
+                const p = document.getElementById('sc-piston');
+                p.setAttribute('x', pistonX - 25);
+                p.setAttribute('y', -20);
+            }
+        },
+        'cam-follower': {
+            cat: 'Linkages',
+            title: 'Cam and Follower',
+            desc: 'Cam profile controls the rise and fall of the follower.',
+            svg: `
+                <g transform="translate(0, 30)">
+                    <path id="cam-shape" d="" fill="#333" stroke="#007acc" stroke-width="3"/>
+                    <circle cx="0" cy="0" r="4" fill="#666"/>
+                </g>
+                <g id="follower-group">
+                    <rect x="-6" y="-120" width="12" height="120" fill="#ddd"/>
+                    <circle cx="0" cy="0" r="6" fill="#00bfff"/>
+                </g>
+            `,
+            update: (t) => {
+                const angle = t * 0.003;
+                const cam = document.getElementById('cam-shape');
+                const follower = document.getElementById('follower-group');
+                
+                let d = "";
+                const res = 60;
+                for(let i=0; i<=res; i++) {
+                    const theta = (i/res) * Math.PI * 2;
+                    const r = 40 + 20 * Math.cos(theta); 
+                    const x = r * Math.cos(theta + angle);
+                    const y = r * Math.sin(theta + angle);
+                    d += (i===0 ? "M" : "L") + `${x} ${y} `;
+                }
+                d += "Z";
+                if(cam) cam.setAttribute('d', d);
+
+                const evalAngle = -Math.PI/2 - angle;
+                const r_top = 40 + 20 * Math.cos(evalAngle);
+                
+                if(follower) follower.setAttribute('transform', `translate(0, ${30 - r_top - 6})`);
+            }
+        },
+        'geneva-drive': {
+            cat: 'Linkages',
+            title: 'Geneva Drive',
+            desc: 'Intermittent motion mechanism (continuous to stepped rotation).',
+            svg: `
+                <g id="geneva-driver" transform="translate(0, 0)">
+                    <circle r="45" fill="none" stroke="#444" stroke-width="2"/>
+                    <circle cx="35" cy="0" r="5" fill="#007acc" stroke="#fff"/>
+                    <path d="M0 0 L35 0" stroke="#444"/>
+                </g>
+                <g id="geneva-wheel" transform="translate(60, 0)">
+                   <path id="g-cross" d="M0 0 L0 -40 M0 0 L40 0 M0 0 L0 40 M0 0 L-40 0" stroke="#00bfff" stroke-width="8" stroke-linecap="round"/>
+                   <circle r="10" fill="#222" stroke="#00bfff"/>
+                </g>
+            `,
+            update: (t) => {
+                const driver = document.getElementById('geneva-driver');
+                const wheel = document.getElementById('geneva-wheel');
+                
+                const angle = (t * 0.002); 
+                if(driver) driver.setAttribute('transform', `translate(-45, 0) rotate(${angle * 180 / Math.PI})`);
+                
+                const turn = Math.floor(angle / (2 * Math.PI));
+                const local = angle - turn * 2 * Math.PI; 
+                
+                let wheelAng = turn * 90;
+                if (local < Math.PI / 2) {
+                     wheelAng += (local / (Math.PI/2)) * 90;
+                } else {
+                     wheelAng += 90;
+                }
+                
+                if(wheel) wheel.setAttribute('transform', `translate(45, 0) rotate(${wheelAng - 45})`);
+            }
+        },
+
+        // === 3. SHAFTS & COUPLINGS ===
+        'u-joint': {
+            cat: 'Shafts',
+            title: 'Universal Joint',
+            desc: 'Transmits power between shafts at different angles.',
+            svg: `
+                <g transform="rotate(20)">
+                    <g class="spin">
+                        <rect x="-100" y="-10" width="80" height="20" fill="#444"/>
+                        <path d="M-20 -25 L0 -25 L0 25 L-20 25 Z" fill="#007acc"/>
+                    </g>
+                </g>
+                
+                <g transform="rotate(-20)">
+                     <g class="spin" style="animation-direction: reverse;">
+                         <rect x="20" y="-10" width="80" height="20" fill="#444"/>
+                         <path d="M0 -25 L20 -25 L20 25 L0 25 Z" fill="#00bfff"/>
+                    </g>
+                </g>
+                <circle r="12" fill="#fff" opacity="0.8"/>
+            `
+        },
+        'rigid-coupling': {
+            cat: 'Shafts',
+            title: 'Rigid Coupling',
+            desc: 'Connects shafts directly. No flexibility.',
+            svg: `
+                <g class="spin">
+                    <rect x="-130" y="-15" width="110" height="30" fill="#333" />
+                    <rect x="-20" y="-40" width="20" height="80" fill="#444" stroke="#666" stroke-width="2"/>
+                    <rect x="20" y="-15" width="110" height="30" fill="#333" />
+                    <rect x="0" y="-40" width="20" height="80" fill="#444" stroke="#666" stroke-width="2"/>
+                    
+                    <circle cx="0" cy="-25" r="4" fill="#eee"/>
+                    <circle cx="0" cy="25" r="4" fill="#eee"/>
+                    <line x1="-20" y1="0" x2="20" y2="0" stroke="#222" stroke-dasharray="2 2"/>
+                </g>
+            `
+        },
+        'oldham': {
+            cat: 'Shafts',
+            title: 'Oldham Coupling',
+            desc: 'Compensates for parallel shaft misalignment.',
+            svg: `
+                <g transform="translate(-60, -20)">
+                    <g class="spin">
+                         <circle r="40" fill="none" stroke="#007acc" stroke-width="4"/>
+                         <rect x="-40" y="-5" width="80" height="10" fill="#007acc"/>
+                    </g>
+                </g>
+                <g transform="translate(60, 20)">
+                    <g class="spin">
+                         <circle r="40" fill="none" stroke="#00bfff" stroke-width="4"/>
+                         <rect x="-5" y="-40" width="10" height="80" fill="#00bfff"/>
+                    </g>
+                </g>
+                <g id="oldham-mid">
+                    <circle r="30" fill="#fff" opacity="0.1"/>
+                    <path d="M-30 0 L30 0 M0 -30 L0 30" stroke="#fff" stroke-width="4"/>
+                </g>
+            `,
+            update: (t) => {
+                const mid = document.getElementById('oldham-mid');
+                if(mid) {
+                    const angle = (t * 0.0025);
+                    const deg = (angle * 180 / Math.PI) % 360;
+                    mid.setAttribute('transform', `rotate(${deg})`);
+                }
+            }
+        },
+
+        // === 4. BEARINGS ===
+        'ball-bearing': {
+            cat: 'Bearings',
+            title: 'Deep Groove Ball Bearing',
+            desc: 'Balls rolling between inner and outer races reduce friction.',
+            svg: `
+                <circle r="100" fill="none" stroke="#444" stroke-width="15"/>
+                <circle r="60" fill="none" stroke="#007acc" stroke-width="10" class="spin"/>
+                
+                <g class="spin" style="animation-duration: 10s;">
+                    <circle cx="0" cy="-80" r="15" fill="#ddd"/>
+                    <circle cx="56" cy="-56" r="15" fill="#ddd"/>
+                    <circle cx="80" cy="0" r="15" fill="#ddd"/>
+                    <circle cx="56" cy="56" r="15" fill="#ddd"/>
+                    <circle cx="0" cy="80" r="15" fill="#ddd"/>
+                    <circle cx="-56" cy="56" r="15" fill="#ddd"/>
+                    <circle cx="-80" cy="0" r="15" fill="#ddd"/>
+                    <circle cx="-56" cy="-56" r="15" fill="#ddd"/>
+                </g>
+            `
+        },
+        'tapered-bearing': {
+            cat: 'Bearings',
+            title: 'Tapered Roller Bearing',
+            desc: 'Supports both radial and axial loads.',
+            svg: `
+                <g transform="translate(0, 10)">
+                    <path d="M-60 -90 L60 -90 L60 -70 L-60 -60 Z" fill="#333" stroke="#555"/>
+                    <path d="M-60 -30 L60 -30 L60 -40 L-60 -40 Z" fill="#007acc" stroke="#555"/>
+                    <g>
+                        <polygon points="-50,-55 -50,-35 50,-40 50,-50" fill="#eee"/>
+                         <animateTransform attributeName="transform" type="translate" values="-2 0; 2 0; -2 0" duration="0.2s" repeatCount="indefinite"/>
+                    </g>
+                </g>
+                <rect x="-120" y="-10" width="240" height="20" fill="#111"/>
+                <g transform="scale(1, -1) translate(0, 10)">
+                     <path d="M-60 -90 L60 -90 L60 -70 L-60 -60 Z" fill="#333" stroke="#555"/>
+                     <path d="M-60 -30 L60 -30 L60 -40 L-60 -40 Z" fill="#007acc" stroke="#555"/>
+                     <g>
+                        <polygon points="-50,-55 -50,-35 50,-40 50,-50" fill="#eee"/>
+                         <animateTransform attributeName="transform" type="translate" values="2 0; -2 0; 2 0" duration="0.2s" repeatCount="indefinite"/>
+                    </g>
+                </g>
+            `
+        },
+        'plain-bearing': {
+            cat: 'Bearings',
+            title: 'Plain Bearing (Bushing)',
+            desc: 'Shaft rotates within a sleeve using oil film lubrication.',
+            svg: `
+                <rect x="-70" y="-70" width="140" height="140" rx="10" fill="#333" stroke="#555"/>
+                <circle r="55" fill="#cda" stroke="#9a8" stroke-width="2"/> 
+                
+                <g class="spin">
+                    <circle cx="0" cy="3" r="48" fill="#ddd" stroke="#999" stroke-width="2"/>
+                    <line x1="0" y1="3" x2="48" y2="3" stroke="#999" stroke-width="2"/>
+                </g>
+                
+                <path d="M0 3 L0 55" stroke="yellow" stroke-width="3" opacity="0.6" transform="rotate(45)">
+                     <animateTransform attributeName="transform" type="rotate" from="0 0 0" to="360 0 0" duration="4s" repeatCount="indefinite"/>
+                </path>
+                <text x="0" y="90" fill="#888" font-size="12" text-anchor="middle">Oil Film (Exaggerated)</text>
+            `
+        }
+    };
+
+    // --- APP ENGINE ---
+    const menuEl = document.getElementById('menu');
+    const contentEl = document.getElementById('content');
+    let rafId = null;
+
+    function init() {
+        const cats = {};
+        for(let k in DATA) {
+            const item = DATA[k];
+            if(!cats[item.cat]) cats[item.cat] = [];
+            cats[item.cat].push({...item, key: k});
+        }
+
+        for(let c in cats) {
+            let h = document.createElement('div');
+            h.className = 'cat-label';
+            h.textContent = c;
+            menuEl.appendChild(h);
+            
+            cats[c].forEach(item => {
+                let btn = document.createElement('div');
+                btn.className = 'nav-item';
+                btn.textContent = item.title;
+                btn.onclick = () => load(item.key, btn);
+                menuEl.appendChild(btn);
+            });
+        }
+    }
+
+    function load(key, btnEl) {
+        document.querySelectorAll('.nav-item').forEach(e => e.classList.remove('active'));
+        btnEl.classList.add('active');
+        document.querySelector('.sidebar').classList.remove('open');
+
+        const item = DATA[key];
+        
+        contentEl.innerHTML = `
+            <span class="badge">${item.cat}</span>
+            <h1>${item.title}</h1>
+            <div class="stage">
+                <svg viewBox="-150 -100 300 200" preserveAspectRatio="xMidYMid meet">
+                    ${item.svg}
+                </svg>
+            </div>
+            <div class="grid">
+                <div class="box"><h3>Description</h3><p>${item.desc}</p></div>
+                <div class="box"><h3>Simulation</h3><p>Real-time vector render.</p></div>
+            </div>
+        `;
+
+        if(rafId) cancelAnimationFrame(rafId);
+        
+        const loop = (t) => {
+            if(item.update) item.update(t);
+            rafId = requestAnimationFrame(loop);
+        };
+        rafId = requestAnimationFrame(loop);
+    }
+
+    init();
+</script>
+</body>
+</html>
